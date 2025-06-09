@@ -2,7 +2,7 @@ from Algorithms.AStar import AStar
 from Algorithms.BFS import BFS
 from Algorithms.LocalSearch import local_search
 from Algorithms.Minimax import minimaxAgent
-
+from Algorithms.DFS import DFS
 
 class SearchAgent:
     def __init__(self, _map, _food_Position, start_row, start_col, N, M):
@@ -22,4 +22,5 @@ class SearchAgent:
             return local_search(self.map, self.start_row, self.start_col, self.N, self.M, visited.copy())
         if ALGORITHMS == "Minimax":
             return minimaxAgent(self.map, self.start_row, self.start_col, self.N, self.M, depth, Score)
-    
+        if ALGORITHMS == "DFS":
+            return DFS(self.map, self.food_Position, self.start_row, self.start_col, self.N, self.M)

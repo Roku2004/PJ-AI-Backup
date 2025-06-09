@@ -5,11 +5,10 @@ from Utils.utils import Manhattan, DDX, isValid2
 
 def Ghost_move_level4(_map, start_row, start_col, end_row, end_col, N, M):
     visited = [[False for _ in range(M)] for _ in range(N)]
-    trace = {} #Dictionary lưu vết đường đi
-    cost = {} 
-    path = [] #Danh sách lưu đường đi cuối cùng
-    queue = PriorityQueue()  #Hàng đợi ưu tiên để xét các ô theo thứ tự chi phí tăng dần
-
+    trace = {}
+    cost = {}
+    path = []
+    queue = PriorityQueue()
 
     start = (start_row, start_col)
     end = (end_row, end_col)

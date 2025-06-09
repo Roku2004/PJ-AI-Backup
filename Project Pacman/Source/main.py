@@ -79,7 +79,6 @@ def check_Object(_map, row, col):
         _ghost.append(Player(row, col, IMAGE_GHOST[len(_ghost) % len(IMAGE_GHOST)]))
         _ghost_Position.append([row, col])
 
-
 def initData() -> None:
     global N, M, _map, _food_Position, _food, _road, _wall, _ghost, _visited, Score, _state_PacMan, _ghost_Position
     N = M = Score = _state_PacMan = 0
@@ -114,8 +113,6 @@ def Draw(_screen) -> None:
     text_surface = my_font.render('Score: {Score}'.format(Score=Score), False, RED)
     screen.blit(text_surface, (0, 0))
 
-
-# 1: Random, 2: A*
 def generate_Ghost_new_position(_ghost, _type: int = 0) -> list[list[int]]:
     _ghost_new_position = []
     if _type == 1:
@@ -151,7 +148,6 @@ def check_collision_ghost(_ghost, pac_row=-1, pac_col=-1) -> bool:
 
     return False
 
-
 def change_direction_PacMan(new_row, new_col):
     global PacMan, _state_PacMan
     [current_row, current_col] = PacMan.getRC()
@@ -172,8 +168,6 @@ def randomPacManNewPos(_map, row, col, _N, _M):
         new_r, new_c = d_r + row, d_c + col
         if isValid2(_map, new_r, new_c, _N, _M):
             return [new_r, new_c]
-
-
 def startGame() -> None:
     global _map, _visited, Score
     _ghost_new_position = []
@@ -311,6 +305,17 @@ def startGame() -> None:
 
                 elif Level == 4 and len(_food_Position) > 0:
                     new_PacMan_Pos = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL4"], depth=4, Score=Score)
+
+                elif Level == 5: 
+                    if len(result) <= 0:
+                        result = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL5"])
+                        if len(result) > 0:
+                            result.pop(0)
+                            new_PacMan_Pos = result[0]
+
+                    elif len(result) > 1:
+                        result.pop(0)
+                        new_PacMan_Pos = result[0]
 
                 if len(_food_Position) > 0 and (len(new_PacMan_Pos) == 0 or [row, col] == new_PacMan_Pos):
                     new_PacMan_Pos = randomPacManNewPos(_map, row, col, N, M)

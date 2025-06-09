@@ -1,5 +1,4 @@
 import os
-
 import pygame
 import sys
 
@@ -66,19 +65,26 @@ class Menu:
         self.screen = screen
         self.btnStart = Button(WIDTH // 2 - 100 + 5, HEIGHT - 170, 200, 100, screen, "Start", self.myFunction)
 
-        self.btnLevel1 = Button(WIDTH // 2 - 150, HEIGHT // 4 * 0 + 20, 300, 100, screen, "Level 1",
-                                self._load_map_level_1)
-        self.btnLevel2 = Button(WIDTH // 2 - 150, HEIGHT // 4 * 1 + 20, 300, 100, screen, "Level 2",
-                                self._load_map_level_2)
-        self.btnLevel3 = Button(WIDTH // 2 - 150, HEIGHT // 4 * 2 + 20, 300, 100, screen, "Level 3",
-                                self._load_map_level_3)
-        self.btnLevel4 = Button(WIDTH // 2 - 150, HEIGHT // 4 * 3 + 20, 300, 100, screen, "Level 4",
-                                self._load_map_level_4)
+        # SỬA: Tạo danh sách nút level
+        level_buttons = [
+            ("Level 1", self._load_map_level_1),
+            ("Level 2", self._load_map_level_2),
+            ("Level 3", self._load_map_level_3),
+            ("Level 4", self._load_map_level_4),
+            ("Level 5", self._load_map_level_5),
+        ]
+        self.level_buttons = []
+        total_levels = len(level_buttons)
+        row_height = HEIGHT // (total_levels + 1)
+
+        for idx, (text, handler) in enumerate(level_buttons):
+            y = row_height * (idx + 1) - 50
+            btn = Button(WIDTH // 2 - 150, y, 300, 100, screen, text, handler)
+            self.level_buttons.append(btn)
 
         self.btnPrev = Button(WIDTH // 2 - 250, HEIGHT // 4 * 3 + 35, 100, 100, screen, "<", self.prevMap)
         self.btnNext = Button(WIDTH // 2 + 150, HEIGHT // 4 * 3 + 35, 100, 100, screen, ">", self.nextMap)
         self.btnPlay = Button(WIDTH // 2 - 75, HEIGHT // 4 * 3 + 35, 150, 100, screen, "PLAY", self.selectMap)
-
         self.btnBack = Button(40, HEIGHT // 4 * 3 + 35, 150, 100, screen, "BACK", self.myFunction)
 
     def nextMap(self):
@@ -133,6 +139,14 @@ class Menu:
             self.current_screen = 3
         self.clicked = False
 
+    def _load_map_level_5(self):
+        if self.clicked:
+            self.current_level = 5
+            for file in os.listdir('../Input/Level5'):
+                self.map_name.append('../Input/Level5/' + file)
+            self.current_screen = 3
+        self.clicked = False
+
     def draw_map(self, fileName):
         text_surface = my_font.render(
             'LEVEL {level} - MAP {map}'.format(level=self.current_level, map=self.current_map + 1), False, WHITE)
@@ -152,7 +166,6 @@ class Menu:
                 cell = int(line[j])
                 if cell == WALL:
                     image = pygame.Surface([SIZE_WALL, SIZE_WALL])
-                    # image.fill(color)
                     pygame.draw.rect(image, BLUE, (0, 0, SIZE_WALL, SIZE_WALL), 1)
                     top = i * SIZE_WALL + MARGIN_TOP
                     left = j * SIZE_WALL + MARGIN_LEFT
@@ -162,7 +175,6 @@ class Menu:
                     image.fill(WHITE)
                     image.set_colorkey(WHITE)
                     pygame.draw.ellipse(image, YELLOW, [0, 0, SIZE_WALL // 2, SIZE_WALL // 2])
-
                     top = i * SIZE_WALL + MARGIN_TOP + SIZE_WALL // 2 - SIZE_WALL // 4
                     left = j * SIZE_WALL + MARGIN_LEFT + SIZE_WALL // 2 - SIZE_WALL // 4
                     self.screen.blit(image, (left, top))
@@ -188,7 +200,6 @@ class Menu:
             self.done = True
 
     def run(self):
-
         while not self.done:
             self.clicked = False
             for event in pygame.event.get():
@@ -204,10 +215,8 @@ class Menu:
 
             elif self.current_screen == 2:
                 self.screen.fill(BLACK)
-                self.btnLevel1.process()
-                self.btnLevel2.process()
-                self.btnLevel3.process()
-                self.btnLevel4.process()
+                for btn in self.level_buttons:
+                    btn.process()
 
             elif self.current_screen == 3:
                 self.screen.fill(BLACK)

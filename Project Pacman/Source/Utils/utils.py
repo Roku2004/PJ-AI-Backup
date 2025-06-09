@@ -14,7 +14,6 @@ def isValid2(_map, row: int, col: int, N: int, M: int) -> bool:
 def Manhattan(x1: int, y1: int, x2: int, y2: int) -> float:
     return abs(x1 - x2) + abs(y1 - y2)
 
-
 def find_nearest_food(_food_Position: list[list[int]], start_row: int, start_col: int):
     food_row, food_col, _id = -1, -1, -1
     for idx in range(len(_food_Position)):
