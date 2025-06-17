@@ -1,41 +1,44 @@
-from Utils.utils import find_nearest_food, DDX, isValid
+from Extension.extension import find_nearest_food, DDX, Thief_check
 
 
-def BFS(_map, _food_Position, start_row, start_col, N, M):
-    visited = [[False for _ in range(M)] for _ in range(N)]
-    trace = [[[-1, -1] for _ in range(M)] for _ in range(N)]
+def find_path_using_bfs(maze_map, food_positions, start_row, start_col, height, width):
+    cells_visited = [[False for _ in range(width)] for _ in range(height)]
+    path_tracker = [[[-1, -1] for _ in range(width)] for _ in range(height)]
 
-    [food_row, food_col, _id] = find_nearest_food(_food_Position, start_row, start_col)
+    [target_row, target_col, food_index] = find_nearest_food(food_positions, start_row, start_col)
 
-    if _id == -1:
+    if food_index == -1:
         return []
 
-    lt = []
-    chk = False
-    visited[start_row][start_col] = True
-    lt.append([start_row, start_col])
-    while len(lt) > 0:
-        [row, col] = lt.pop(0)
+    queue = []
+    found_path = False
+    
+    cells_visited[start_row][start_col] = True
+    queue.append([start_row, start_col])
+    
+    while queue:
+        [current_row, current_col] = queue.pop(0)
 
-        if [row, col] == [food_row, food_col]:
-            chk = True
+        if [current_row, current_col] == [target_row, target_col]:
+            found_path = True
             break
 
-        for [d_r, d_c] in DDX:
-            new_row, new_col = row + d_r, col + d_c
-            if isValid(_map, new_row, new_col, N, M) and not visited[new_row][new_col]:
-                visited[new_row][new_col] = True
-                lt.append([new_row, new_col])
-                trace[new_row][new_col] = [row, col]
+        for [direction_row, direction_col] in DDX:
+            next_row, next_col = current_row + direction_row, current_col + direction_col
+            if Thief_check(maze_map, next_row, next_col, height, width) and not cells_visited[next_row][next_col]:
+                cells_visited[next_row][next_col] = True
+                queue.append([next_row, next_col])
+                path_tracker[next_row][next_col] = [current_row, current_col]
 
-    if not chk:
-        _food_Position.pop(_id)
-        return BFS(_map, _food_Position, start_row, start_col, N, M)
+    if not found_path:
+        food_positions.pop(food_index)
+        return find_path_using_bfs(maze_map, food_positions, start_row, start_col, height, width)
 
-    result = [[food_row, food_col]]
-    [row, col] = trace[food_row][food_col]
-    while row != -1:
-        result.insert(0, [row, col])
-        [row, col] = trace[row][col]
+    final_path = [[target_row, target_col]]
+    [backtrack_row, backtrack_col] = path_tracker[target_row][target_col]
+    
+    while backtrack_row != -1:
+        final_path.insert(0, [backtrack_row, backtrack_col])
+        [backtrack_row, backtrack_col] = path_tracker[backtrack_row][backtrack_col]
 
-    return result
+    return final_path

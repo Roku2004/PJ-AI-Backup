@@ -1,34 +1,37 @@
-from Utils.utils import DDX, isValid
+from Extension.extension import DDX, Thief_check
 from constants import FOOD
 
 
-def Deque_DFS(_map, _food_Position, row, col, N, M, visited, trace):
-    if visited[row][col]:
+def recursive_dfs(maze_map, food_positions, current_row, current_col, height, width, visited, path):
+    if visited[current_row][current_col]:
         return 0
-    visited[row][col] = True
-    trace.append([row, col])
-    if _map[row][col] == FOOD:
+    
+    visited[current_row][current_col] = True
+    path.append([current_row, current_col])
+    
+    if maze_map[current_row][current_col] == FOOD:
         return 1
 
-    for [d_r, d_c] in DDX:
-        new_row, new_col = row + d_r, col + d_c
-        if isValid(_map, new_row, new_col, N, M) and not visited[new_row][new_col]:
-            res = Deque_DFS(_map, _food_Position, new_row, new_col, N, M, visited, trace)
-            if res == 1:
+    for [direction_row, direction_col] in DDX:
+        next_row, next_col = current_row + direction_row, current_col + direction_col
+        if Thief_check(maze_map, next_row, next_col, height, width) and not visited[next_row][next_col]:
+            result = recursive_dfs(maze_map, food_positions, next_row, next_col, height, width, visited, path)
+            if result == 1:
                 return 1
-            if len(trace) > 0:
-                trace.pop(len(trace) - 1)
+                
+            if path:
+                path.pop()
 
     return 0
 
 
-def DFS(_map, _food_Position, start_row, start_col, N, M):
-    visited = [[False for _ in range(M)] for _ in range(N)]
-    trace = []
+def find_path_using_dfs(maze_map, food_positions, start_row, start_col, height, width):
+    visited = [[False for _ in range(width)] for _ in range(height)]
+    path = []
 
-    res = Deque_DFS(_map, _food_Position, start_row, start_col, N, M, visited, trace)
+    result = recursive_dfs(maze_map, food_positions, start_row, start_col, height, width, visited, path)
 
-    if res == 1:
-        return trace
+    if result == 1:
+        return path
 
     return []

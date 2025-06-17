@@ -2,8 +2,8 @@ import os
 import pygame
 import sys
 
-from constants import FPS, WIDTH, HEIGHT, BLUE, BLACK, WALL, FOOD, WHITE, YELLOW, MONSTER, IMAGE_GHOST, \
-    IMAGE_PACMAN
+from constants import FPS, WIDTH, HEIGHT, BLUE, BLACK, WALL, FOOD, WHITE, YELLOW, POLICE, IMAGE_POLICE, \
+    IMAGE_THIEF
 
 clock = pygame.time.Clock()
 bg = pygame.image.load("images/home.png")
@@ -71,7 +71,6 @@ class Menu:
             ("Level 2", self._load_map_level_2),
             ("Level 3", self._load_map_level_3),
             ("Level 4", self._load_map_level_4),
-            ("Level 5", self._load_map_level_5),
         ]
         self.level_buttons = []
         total_levels = len(level_buttons)
@@ -178,16 +177,16 @@ class Menu:
                     top = i * SIZE_WALL + MARGIN_TOP + SIZE_WALL // 2 - SIZE_WALL // 4
                     left = j * SIZE_WALL + MARGIN_LEFT + SIZE_WALL // 2 - SIZE_WALL // 4
                     self.screen.blit(image, (left, top))
-                elif cell == MONSTER:
-                    image = pygame.image.load(IMAGE_GHOST[count_ghost]).convert_alpha()
+                elif cell == POLICE:
+                    image = pygame.image.load(IMAGE_POLICE[count_ghost]).convert_alpha()
                     image = pygame.transform.scale(image, (SIZE_WALL, SIZE_WALL))
                     top = i * SIZE_WALL + MARGIN_TOP
                     left = j * SIZE_WALL + MARGIN_LEFT
-                    count_ghost = (count_ghost + 1) % len(IMAGE_GHOST)
+                    count_ghost = (count_ghost + 1) % len(IMAGE_POLICE)
                     self.screen.blit(image, (left, top))
 
         x = f.readline().split()
-        image = pygame.image.load(IMAGE_PACMAN[0]).convert_alpha()
+        image = pygame.image.load(IMAGE_THIEF[0]).convert_alpha()
         image = pygame.transform.scale(image, (SIZE_WALL, SIZE_WALL))
         top = int(x[0]) * SIZE_WALL + MARGIN_TOP
         left = int(x[1]) * SIZE_WALL + MARGIN_LEFT

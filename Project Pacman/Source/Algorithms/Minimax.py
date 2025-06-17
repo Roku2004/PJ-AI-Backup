@@ -1,129 +1,142 @@
-from Utils.utils import Manhattan, DDX, isValid2, isValid
-from constants import FOOD, MONSTER, EMPTY
+from Extension.extension import Manhattan, DDX, Police_check, Thief_check
+from constants import FOOD, POLICE, EMPTY
 
-_food_pos = []
+food_positions_cache = []
 
 
-def evaluationFunction(_map, pac_row, pac_col, N, M, score):
-    # get food position
-    ghost_pos = []
-    distancesToFoodList = []
-    for row in range(N): 
-        for col in range(M):
-            if _map[row][col] == FOOD:
-                distancesToFoodList.append(Manhattan(row, col, pac_row, pac_col))
-            if _map[row][col] == MONSTER:
-                ghost_pos.append([row, col])
-            if _map[row][col] == EMPTY:
+def evaluate_state(maze_map, thief_row, thief_col, height, width, score):
+    police_positions = []
+    food_distances = []
+    
+    for row in range(height): 
+        for col in range(width):
+            if maze_map[row][col] == FOOD:
+                food_distances.append(Manhattan(row, col, thief_row, thief_col))
+            if maze_map[row][col] == POLICE:
+                police_positions.append([row, col])
+            if maze_map[row][col] == EMPTY:
                 score += 5
 
-    # Consts
-    INF = 1000000  # Infinite value
-    WEIGHT_FOOD = 200  # Food base value
-    WEIGHT_GHOST = -250  # Ghost base value
+    # Constants
+    INF = 1000000
+    FOOD_WEIGHT = 200
+    POLICE_WEIGHT = -250
 
-    #tính điểm 
-    _score = score
-    if len(distancesToFoodList) > 0:
-        _score += WEIGHT_FOOD / (min(distancesToFoodList) if min(distancesToFoodList) != 0 else 1)
+    # Calculate score
+    final_score = score
+    
+    if food_distances:
+        min_distance = min(food_distances) if min(food_distances) != 0 else 1
+        final_score += FOOD_WEIGHT / min_distance
     else:
-        _score += WEIGHT_FOOD
+        final_score += FOOD_WEIGHT
 
-    for [g_r, g_c] in ghost_pos:
-        distance = Manhattan(pac_row, pac_col, g_r, g_c)
+    for [police_row, police_col] in police_positions:
+        distance = Manhattan(thief_row, thief_col, police_row, police_col)
         if distance > 0:
-            _score += WEIGHT_GHOST / distance
+            final_score += POLICE_WEIGHT / distance
         else:
             return -INF
 
-    return _score
+    return final_score
 
 
-def minimaxAgent(_map, pac_row, pac_col, N, M, depth, Score): #quyết định di chuyển tối ưu cho Pacman dựa trên thuật toán Minimax
-
-    def terminal(_map, _pac_row, _pac_col, _N, _M, _depth) -> bool:
-        if _map[_pac_row][_pac_col] == MONSTER or _depth == 0:
+def find_path_using_minimax(maze_map, thief_row, thief_col, height, width, depth, score):
+    def is_terminal(current_map, current_thief_row, current_thief_col, map_height, map_width, current_depth):
+        if current_map[current_thief_row][current_thief_col] == POLICE or current_depth == 0:
             return True
 
-        for row in range(_N):
-            for col in range(_M):
-                if _map[row][col] == FOOD:
+        for row in range(map_height):
+            for col in range(map_width):
+                if current_map[row][col] == FOOD:
                     return False
 
         return True
 
-    def min_value(_map, _pac_row, _pac_col, _N, _M, _depth, score):
-        if terminal(_map, _pac_row, _pac_col, _N, _M, _depth):
-            return evaluationFunction(_map, _pac_row, _pac_col, _N, _M, score)
+    def min_value(current_map, current_thief_row, current_thief_col, map_height, map_width, current_depth, current_score):
+        if is_terminal(current_map, current_thief_row, current_thief_col, map_height, map_width, current_depth):
+            return evaluate_state(current_map, current_thief_row, current_thief_col, map_height, map_width, current_score)
 
-        v = 10000000000000000
-        for row in range(_N):
-            for col in range(_M):
-                if _map[row][col] == MONSTER:
-                    for [_d_r, _d_c] in DDX:
-                        _new_r, _new_c = _d_r + row, _d_c + col
-                        if isValid2(_map, _new_r, _new_c, _N, _M):
-                            state = _map[_new_r][_new_c]
-                            _map[_new_r][_new_c] = MONSTER
-                            _map[row][col] = EMPTY
-                            v = min(v, max_value(_map, _pac_row, _pac_col, _N, _M, _depth - 1, score)) #12 , 15, 25 
-                            _map[_new_r][_new_c] = state
-                            _map[row][col] = MONSTER
-        return v
+        value = float("inf")
+        
+        for row in range(map_height):
+            for col in range(map_width):
+                if current_map[row][col] == POLICE:
+                    for [direction_row, direction_col] in DDX:
+                        next_row, next_col = direction_row + row, direction_col + col
+                        if Police_check(current_map, next_row, next_col, map_height, map_width):
+                            state = current_map[next_row][next_col]
+                            current_map[next_row][next_col] = POLICE
+                            current_map[row][col] = EMPTY
+                            value = min(value, max_value(current_map, current_thief_row, current_thief_col, map_height, map_width, current_depth - 1, current_score))
+                            current_map[next_row][next_col] = state
+                            current_map[row][col] = POLICE
+        
+        return value
 
-    def max_value(_map, _pac_row, _pac_col, _N, _M, _depth, score):
-        if terminal(_map, _pac_row, _pac_col, _N, _M, _depth):
-            return evaluationFunction(_map, _pac_row, _pac_col, _N, _M, score)
+    def max_value(current_map, current_thief_row, current_thief_col, map_height, map_width, current_depth, current_score):
+        if is_terminal(current_map, current_thief_row, current_thief_col, map_height, map_width, current_depth):
+            return evaluate_state(current_map, current_thief_row, current_thief_col, map_height, map_width, current_score)
 
-        v = -10000000000000000
-        for [_d_r, _d_c] in DDX:
-            _new_r, _new_c = _pac_row + _d_r, _pac_col + _d_c
+        value = float("-inf")
+        
+        for [direction_row, direction_col] in DDX:
+            next_row, next_col = current_thief_row + direction_row, current_thief_col + direction_col
             
-            if isValid(_map, _new_r, _new_c, _N, _M):
-                state = _map[_new_r][_new_c]
-                _map[_new_r][_new_c] = EMPTY
+            if Thief_check(current_map, next_row, next_col, map_height, map_width):
+                state = current_map[next_row][next_col]
+                current_map[next_row][next_col] = EMPTY
+                local_score = current_score
+                
                 if state == FOOD:
-                    score += 40
-                    _food_pos.pop(_food_pos.index((_new_r, _new_c)))
+                    local_score += 40
+                    food_positions_cache.pop(food_positions_cache.index((next_row, next_col)))
                 else:
-                    score -= 10
-                v = max(v, min_value(_map, _new_r, _new_c, _N, _M, _depth - 1, score))
-                _map[_new_r][_new_c] = state
+                    local_score -= 10
+                    
+                value = max(value, min_value(current_map, next_row, next_col, map_height, map_width, current_depth - 1, local_score))
+                
+                current_map[next_row][next_col] = state
+                
                 if state == FOOD:
-                    score -= 40
-                    _food_pos.append((_new_r, _new_c))
-                else:
-                    score += 10
-        return v
+                    food_positions_cache.append((next_row, next_col))
+                    
+        return value
 
     # Main function
-    res = [] #kết quả
-    global _food_pos
-    _food_pos = []
-    for _row in range(N):
-        for _col in range(M):
-            if _map[_row][_col] == FOOD:
-                _food_pos.append((_row, _col))
+    possible_moves = []
+    global food_positions_cache
+    food_positions_cache = []
+    
+    for row in range(height):
+        for col in range(width):
+            if maze_map[row][col] == FOOD:
+                food_positions_cache.append((row, col))
 
-    for [d_r, d_c] in DDX:
-        new_r, new_c = pac_row + d_r, pac_col + d_c
-        if isValid(_map, new_r, new_c, N, M):
-            _state = _map[new_r][new_c]
-            _map[new_r][new_c] = EMPTY
-            if _state == FOOD:
-                Score += 40
-                _food_pos.pop(_food_pos.index((new_r, new_c)))
+    for [direction_row, direction_col] in DDX:
+        next_row, next_col = thief_row + direction_row, thief_col + direction_col
+        
+        if Thief_check(maze_map, next_row, next_col, height, width):
+            current_state = maze_map[next_row][next_col]
+            maze_map[next_row][next_col] = EMPTY
+            local_score = score
+            
+            if current_state == FOOD:
+                local_score += 40
+                food_positions_cache.pop(food_positions_cache.index((next_row, next_col)))
             else:
-                Score -= 10
-            res.append(([new_r, new_c], min_value(_map, new_r, new_c, N, M, depth, Score)))
-            _map[new_r][new_c] = _state
-            if _state == FOOD:
-                Score -= 40
-                _food_pos.append((new_r, new_c))
-            else:
-                Score += 10
+                local_score -= 10
+                
+            possible_moves.append(([next_row, next_col], min_value(maze_map, next_row, next_col, height, width, depth, local_score)))
+            
+            maze_map[next_row][next_col] = current_state
+            
+            if current_state == FOOD:
+                food_positions_cache.append((next_row, next_col))
 
-    res.sort(key=lambda k: k[1])
-    if len(res) > 0:
-        return res[-1][0] # trả về vị trí di chuyển tối ưu cuối cùng của list
+    possible_moves.sort(key=lambda k: k[1])
+    
+    if possible_moves:
+        return possible_moves[-1][0]  # Return position with highest evaluation
+        
     return []

@@ -1,365 +1,375 @@
 import sys
-
 import pygame
 import random
 
-from Algorithms.Ghost_Move import Ghost_move_level4
-from Algorithms.SearchAgent import SearchAgent
+from Algorithms.Police_Move import move_police_using_astar
+from Algorithms.SearchAlgorithms import SearchAlgorithms
 from Object.Food import Food
 from Object.Player import Player
 from Object.Wall import Wall
-from Utils.utils import DDX, isValid2
+from Extension.extension import DDX, Police_check, Thief_check
 from constants import *
 from Object.Menu import Menu, Button
 
-N = M = Score = _state_PacMan = 0
-_map = []
-_wall = []
-_road = []
-_food = []
-_ghost = []
-_food_Position = []
-_ghost_Position = []
-_visited = []
-PacMan: Player
-Level = 1
-Map_name = ""
+# Game state variables
+height = width = score = thief_animation_state = 0
+maze_map = []
+wall_objects = []
+road_objects = []
+food_objects = []
+police_objects = []
+food_positions = []
+police_positions = []
+visit_counter = []
+thief_player = None
+current_level = 1
+map_file_path = ""
 
-# Initial Pygame --------------------------
+# Initialize Pygame
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption('PacMan')
+pygame.display.set_caption('Thief')
 clock = pygame.time.Clock()
 
 pygame.font.init()
-my_font = pygame.font.SysFont('Comic Sans MS', 30)
-my_font_2 = pygame.font.SysFont('Comic Sans MS', 100)
+game_font = pygame.font.SysFont('Comic Sans MS', 30)
+large_font = pygame.font.SysFont('Comic Sans MS', 100)
 
 
-# ------------------------------------------
-
-def readMapInFile(map_name: str):
+def load_map_from_file(map_name: str):
+    """Load map data from file"""
     f = open(map_name, "r")
     x = f.readline().split()
-    global N, M, _map
-    _map = []
-    N, M = int(x[0]), int(x[1])
-    for _ in range(N):
+    global height, width, maze_map
+    maze_map = []
+    height, width = int(x[0]), int(x[1])
+    for _ in range(height):
         line = f.readline().split()
-        _m = []
-        for j in range(M):
-            _m.append(int(line[j]))
-        _map.append(_m)
+        map_row = []
+        for j in range(width):
+            map_row.append(int(line[j]))
+        maze_map.append(map_row)
 
-    global PacMan
+    global thief_player
     x = f.readline().split()
 
-    MARGIN["TOP"] = max(0, (HEIGHT - N * SIZE_WALL) // 2)
-    MARGIN["LEFT"] = max(0, (WIDTH - M * SIZE_WALL) // 2)
-    PacMan = Player(int(x[0]), int(x[1]), IMAGE_PACMAN[0])
+    MARGIN["TOP"] = max(0, (HEIGHT - height * SIZE_WALL) // 2)
+    MARGIN["LEFT"] = max(0, (WIDTH - width * SIZE_WALL) // 2)
+    thief_player = Player(int(x[0]), int(x[1]), IMAGE_THIEF[0])
 
     f.close()
 
 
-# --------------------------------- MAIN ---------------------
+def process_map_object(map_array, row, col):
+    """Process map objects at the given position"""
+    if map_array[row][col] == WALL:
+        wall_objects.append(Wall(row, col, BLUE))
 
-def check_Object(_map, row, col):
-    if _map[row][col] == WALL:
-        _wall.append(Wall(row, col, BLUE))
+    if map_array[row][col] == FOOD:
+        food_objects.append(Food(row, col, BLOCK_SIZE, BLOCK_SIZE, YELLOW))
+        food_positions.append([row, col])
 
-    # hidden else later
-    else:
-        pass
-        # _road.append(Food(row, col, BLOCK_SIZE // 3, BLOCK_SIZE // 3, GREEN))
-
-    if _map[row][col] == FOOD:
-        _food.append(Food(row, col, BLOCK_SIZE, BLOCK_SIZE, YELLOW))
-        _food_Position.append([row, col])
-
-    if _map[row][col] == MONSTER:
-        _ghost.append(Player(row, col, IMAGE_GHOST[len(_ghost) % len(IMAGE_GHOST)]))
-        _ghost_Position.append([row, col])
-
-def initData() -> None:
-    global N, M, _map, _food_Position, _food, _road, _wall, _ghost, _visited, Score, _state_PacMan, _ghost_Position
-    N = M = Score = _state_PacMan = 0
-    _map = []
-    _wall = []
-    _road = []
-    _food = []
-    _ghost = []
-    _food_Position = []
-    _ghost_Position = []
-
-    readMapInFile(map_name=Map_name)
-    _visited = [[0 for _ in range(M)] for _ in range(N)]
-
-    for row in range(N):
-        for col in range(M):
-            check_Object(_map, row, col)
+    if map_array[row][col] == POLICE:
+        police_objects.append(Player(row, col, IMAGE_POLICE[len(police_objects) % len(IMAGE_POLICE)]))
+        police_positions.append([row, col])
 
 
-def Draw(_screen) -> None:
-    for wall in _wall:
-        wall.draw(_screen)
-    for road in _road:
-        road.draw(_screen)
-    for food in _food:
-        food.draw(_screen)
-    for ghost in _ghost:
-        ghost.draw(_screen)
+def initialize_game_data():
+    """Initialize all game data"""
+    global height, width, maze_map, food_positions, food_objects, road_objects
+    global wall_objects, police_objects, visit_counter, score, thief_animation_state, police_positions
+    
+    height = width = score = thief_animation_state = 0
+    maze_map = []
+    wall_objects = []
+    road_objects = []
+    food_objects = []
+    police_objects = []
+    food_positions = []
+    police_positions = []
 
-    PacMan.draw(_screen)
+    load_map_from_file(map_name=map_file_path)
+    visit_counter = [[0 for _ in range(width)] for _ in range(height)]
 
-    text_surface = my_font.render('Score: {Score}'.format(Score=Score), False, RED)
-    screen.blit(text_surface, (0, 0))
-
-def generate_Ghost_new_position(_ghost, _type: int = 0) -> list[list[int]]:
-    _ghost_new_position = []
-    if _type == 1:
-        for idx in range(len(_ghost)):
-            [row, col] = _ghost[idx].getRC()
-
-            rnd = random.randint(0, 3)
-            new_row, new_col = row + DDX[rnd][0], col + DDX[rnd][1]
-            while not isValid2(_map, new_row, new_col, N, M):
-                rnd = random.randint(0, 3)
-                new_row, new_col = row + DDX[rnd][0], col + DDX[rnd][1]
-
-            _ghost_new_position.append([new_row, new_col])
-
-    # update latest
-    elif _type == 2:
-        for idx in range(len(_ghost)):
-            [start_row, start_col] = _ghost[idx].getRC()
-            [end_row, end_col] = PacMan.getRC()
-            _ghost_new_position.append(Ghost_move_level4(_map, start_row, start_col, end_row, end_col, N, M))
-
-    return _ghost_new_position
+    for row in range(height):
+        for col in range(width):
+            process_map_object(maze_map, row, col)
 
 
-def check_collision_ghost(_ghost, pac_row=-1, pac_col=-1) -> bool:
-    Pac_pos = [pac_row, pac_col]
-    if pac_row == -1:
-        Pac_pos = PacMan.getRC()
-    for g in _ghost:
-        Ghost_pos = g.getRC()
-        if Pac_pos == Ghost_pos:
+def draw_game_objects(surface):
+    """Draw all game objects on the screen"""
+    for wall in wall_objects:
+        wall.draw(surface)
+    for road in road_objects:
+        road.draw(surface)
+    for food in food_objects:
+        food.draw(surface)
+    for police in police_objects:
+        police.draw(surface)
+
+    thief_player.draw(surface)
+
+    text_surface = game_font.render(f'Score: {score}', False, RED)
+    surface.blit(text_surface, (0, 0))
+
+
+def generate_police_movements(police_list, movement_type=0):
+    """Generate new positions for police objects based on the movement type"""
+    new_police_positions = []
+    
+    # Random movement
+    if movement_type == 1:
+        for idx in range(len(police_list)):
+            [row, col] = police_list[idx].getRC()
+
+            direction = random.randint(0, 3)
+            new_row, new_col = row + DDX[direction][0], col + DDX[direction][1]
+            while not Police_check(maze_map, new_row, new_col, height, width):
+                direction = random.randint(0, 3)
+                new_row, new_col = row + DDX[direction][0], col + DDX[direction][1]
+
+            new_police_positions.append([new_row, new_col])
+
+    # A* pathfinding to chase thief
+    elif movement_type == 2:
+        for idx in range(len(police_list)):
+            [police_row, police_col] = police_list[idx].getRC()
+            [thief_row, thief_col] = thief_player.getRC()
+            new_police_positions.append(move_police_using_astar(maze_map, police_row, police_col, thief_row, thief_col, height, width))
+
+    return new_police_positions
+
+
+def check_collision_with_police(police_list, thief_row=-1, thief_col=-1):
+    """Check if thief collides with any police"""
+    thief_position = [thief_row, thief_col]
+    if thief_row == -1:
+        thief_position = thief_player.getRC()
+        
+    for police in police_list:
+        police_position = police.getRC()
+        if thief_position == police_position:
             return True
 
     return False
 
-def change_direction_PacMan(new_row, new_col):
-    global PacMan, _state_PacMan
-    [current_row, current_col] = PacMan.getRC()
-    _state_PacMan = (_state_PacMan + 1) % len(IMAGE_PACMAN)
+
+def update_thief_direction(new_row, new_col):
+    """Update thief direction based on new position"""
+    global thief_player, thief_animation_state
+    [current_row, current_col] = thief_player.getRC()
+    thief_animation_state = (thief_animation_state + 1) % len(IMAGE_THIEF)
 
     if new_row > current_row:
-        PacMan.change_state(-90, IMAGE_PACMAN[_state_PacMan])
+        thief_player.change_state(-90, IMAGE_THIEF[thief_animation_state])
     elif new_row < current_row:
-        PacMan.change_state(90, IMAGE_PACMAN[_state_PacMan])
+        thief_player.change_state(90, IMAGE_THIEF[thief_animation_state])
     elif new_col > current_col:
-        PacMan.change_state(0, IMAGE_PACMAN[_state_PacMan])
+        thief_player.change_state(0, IMAGE_THIEF[thief_animation_state])
     elif new_col < current_col:
-        PacMan.change_state(180, IMAGE_PACMAN[_state_PacMan])
+        thief_player.change_state(180, IMAGE_THIEF[thief_animation_state])
 
 
-def randomPacManNewPos(_map, row, col, _N, _M):
-    for [d_r, d_c] in DDX:
-        new_r, new_c = d_r + row, d_c + col
-        if isValid2(_map, new_r, new_c, _N, _M):
-            return [new_r, new_c]
-def startGame() -> None:
-    global _map, _visited, Score
-    _ghost_new_position = []
+def get_random_valid_move(map_array, row, col, height_limit, width_limit):
+    """Find a random valid move for thief when algorithms fail"""
+    for [direction_row, direction_col] in DDX:
+        new_row, new_col = direction_row + row, direction_col + col
+        if Thief_check(map_array, new_row, new_col, height_limit, width_limit):
+            return [new_row, new_col]
+    return []
+
+
+def start_game():
+    """Start and run the game"""
+    global maze_map, visit_counter, score
+    police_new_positions = []
     result = []
-    new_PacMan_Pos: list = []
-    initData()
-    pac_can_move = True
+    new_thief_position = []
+    initialize_game_data()
+    thief_can_move = True
 
-    done = False
+    game_exit = False
     is_moving = False
-    timer = 0
+    movement_timer = 0
 
-    status = 0
+    game_status = 0
     delay = 100
 
-    # ----------------- Run pygame
-    while not done:
+    # Main game loop
+    while not game_exit:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                showMenu()
+                show_menu()
                 return
 
         if delay > 0:
             delay -= 1
-        # handle move step by step
+            
+        # Handle movement step by step
         if delay <= 0:
-            if is_moving: # Pacman đang di chuyển
-                timer += 1 
+            if is_moving:  # Characters are moving
+                movement_timer += 1 
 
-                # Ghost move
-                if len(_ghost_new_position) > 0:
-                    for idx in range(len(_ghost)):
-                        [old_row_Gho, old_col_Gho] = _ghost[idx].getRC()
-                        [new_row_Gho, new_col_Gho] = _ghost_new_position[idx]
+                # Police movement
+                if police_new_positions:
+                    for idx in range(len(police_objects)):
+                        [old_police_row, old_police_col] = police_objects[idx].getRC()
+                        [new_police_row, new_police_col] = police_new_positions[idx]
 
-                        if old_row_Gho < new_row_Gho:
-                            _ghost[idx].move(1, 0)  #đi xuống
-                        elif old_row_Gho > new_row_Gho:
-                            _ghost[idx].move(-1, 0) #đi lên
-                        elif old_col_Gho < new_col_Gho:
-                            _ghost[idx].move(0, 1) #đi sang phải
-                        elif old_col_Gho > new_col_Gho:
-                            _ghost[idx].move(0, -1) #đi sang trái
+                        if old_police_row < new_police_row:
+                            police_objects[idx].move(1, 0)  # Move down
+                        elif old_police_row > new_police_row:
+                            police_objects[idx].move(-1, 0)  # Move up
+                        elif old_police_col < new_police_col:
+                            police_objects[idx].move(0, 1)  # Move right
+                        elif old_police_col > new_police_col:
+                            police_objects[idx].move(0, -1)  # Move left
 
-                        if timer >= SIZE_WALL: 
-                            _ghost[idx].setRC(new_row_Gho, new_col_Gho)
+                        if movement_timer >= SIZE_WALL: 
+                            police_objects[idx].setRC(new_police_row, new_police_col)
 
-                            _map[old_row_Gho][old_col_Gho] = EMPTY
-                            _map[new_row_Gho][new_col_Gho] = MONSTER
+                            maze_map[old_police_row][old_police_col] = EMPTY
+                            maze_map[new_police_row][new_police_col] = POLICE
 
-                            # check touch Food
-                            for index in range(len(_food)):
-                                [row_food, col_food] = _food[index].getRC()
-                                if row_food == old_row_Gho and col_food == old_col_Gho:
-                                    _map[row_food][col_food] = FOOD
+                            # Check if police moved over food
+                            for index in range(len(food_objects)):
+                                [food_row, food_col] = food_objects[index].getRC()
+                                if food_row == old_police_row and food_col == old_police_col:
+                                    maze_map[food_row][food_col] = FOOD
 
-                # Pacman move
-                if len(new_PacMan_Pos) > 0:
-                    [old_row_Pac, old_col_Pac] = PacMan.getRC()
-                    [new_row_Pac, new_col_Pac] = new_PacMan_Pos
+                # Thief movement
+                if new_thief_position:
+                    [old_thief_row, old_thief_col] = thief_player.getRC()
+                    [new_thief_row, new_thief_col] = new_thief_position
 
-                    if old_row_Pac < new_row_Pac:
-                        PacMan.move(1, 0) #đi xuống
-                    elif old_row_Pac > new_row_Pac:
-                        PacMan.move(-1, 0) #đi lên
-                    elif old_col_Pac < new_col_Pac:
-                        PacMan.move(0, 1) #đi sang phải
-                    elif old_col_Pac > new_col_Pac:
-                        PacMan.move(0, -1) #đi sang trái
+                    if old_thief_row < new_thief_row:
+                        thief_player.move(1, 0)  # Move down
+                    elif old_thief_row > new_thief_row:
+                        thief_player.move(-1, 0)  # Move up
+                    elif old_thief_col < new_thief_col:
+                        thief_player.move(0, 1)  # Move right
+                    elif old_thief_col > new_thief_col:
+                        thief_player.move(0, -1)  # Move left
 
-                    if timer >= SIZE_WALL or PacMan.touch_New_RC(new_row_Pac, new_col_Pac):
+                    if movement_timer >= SIZE_WALL or thief_player.touch_New_RC(new_thief_row, new_thief_col):
                         is_moving = False
-                        PacMan.setRC(new_row_Pac, new_col_Pac)
-                        Score -= 1
+                        thief_player.setRC(new_thief_row, new_thief_col)
+                        score -= 1
 
-                        # check touch Food
-                        for idx in range(len(_food)):
-                            [row_food, col_food] = _food[idx].getRC()
-                            if row_food == new_row_Pac and col_food == new_col_Pac:
-                                _map[row_food][col_food] = EMPTY
-                                _food.pop(idx)
-                                _food_Position.pop(idx)
-                                Score += 20
+                        # Check if thief collected food
+                        for idx in range(len(food_objects)):
+                            [food_row, food_col] = food_objects[idx].getRC()
+                            if food_row == new_thief_row and food_col == new_thief_col:
+                                maze_map[food_row][food_col] = EMPTY
+                                food_objects.pop(idx)
+                                food_positions.pop(idx)
+                                score += 20
                                 break
-                        new_PacMan_Pos = []
+                        new_thief_position = []
 
-                if check_collision_ghost(_ghost):
-                    pac_can_move = False
-                    done = True
-                    status = -1 # PacMan thua
+                # Check for collisions and end conditions
+                if check_collision_with_police(police_objects):
+                    thief_can_move = False
+                    game_exit = True
+                    game_status = -1  # Thief loses
 
-                if len(_food_Position) == 0:
-                    status = 1 # PacMan thắng
-                    done = True
+                if not food_positions:
+                    game_status = 1  # Thief wins
+                    game_exit = True
 
-                if timer >= SIZE_WALL:
+                if movement_timer >= SIZE_WALL:
                     is_moving = False
             else:
-                # _type = [0:don't move(default), 1:Random, 2:A*]
-                if Level == 3:
-                    _ghost_new_position = generate_Ghost_new_position(_ghost, _type=1)
-                elif Level == 4:
-                    _ghost_new_position = generate_Ghost_new_position(_ghost, _type=2)
+                # Generate police movements based on level
+                if current_level == 3:
+                    police_new_positions = generate_police_movements(police_objects, movement_type=1)
+                elif current_level == 4:
+                    police_new_positions = generate_police_movements(police_objects, movement_type=2)
                 else:
-                    _ghost_new_position = generate_Ghost_new_position(_ghost, _type=0)
+                    police_new_positions = generate_police_movements(police_objects, movement_type=0)
 
                 is_moving = True
-                timer = 0
+                movement_timer = 0
 
-                if not pac_can_move:
+                if not thief_can_move:
                     continue
 
-                [row, col] = PacMan.getRC()
+                [thief_row, thief_col] = thief_player.getRC()
 
-                # cài đặt thuật toán ở đây, thay đổi ALGORITHM trong file constants.py
-                # thuật toán chỉ cần trả về vị trí mới theo format [new_row, new_col] cho biến new_PacMan_Pos
-                # VD: new_PacMan_Pos = [4, 5]
-                # thuật toán sẽ được cài đặt trong folder Algorithms
-
-                search = SearchAgent(_map, _food_Position, row, col, N, M)
-                if Level == 1 or Level == 2:
-                    if len(result) <= 0:
+                # Algorithm selection based on level
+                search = SearchAlgorithms(maze_map, food_positions, thief_row, thief_col, height, width)
+                
+                if current_level == 1:
+                    if not result:
                         result = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL1"])
-                        if len(result) > 0:
+                        if result:
                             result.pop(0)
-                            new_PacMan_Pos = result[0]
+                            new_thief_position = result[0] if result else []
 
                     elif len(result) > 1:
                         result.pop(0)
-                        new_PacMan_Pos = result[0]
-
-                elif Level == 3 and len(_food_Position) > 0:
-                    new_PacMan_Pos = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL3"], visited=_visited)
-                    _visited[row][col] += 1
-
-                elif Level == 4 and len(_food_Position) > 0:
-                    new_PacMan_Pos = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL4"], depth=4, Score=Score)
-
-                elif Level == 5: 
-                    if len(result) <= 0:
-                        result = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL5"])
-                        if len(result) > 0:
+                        new_thief_position = result[0]
+                elif current_level == 2:
+                    if not result:
+                        result = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL2"])
+                        if result:
                             result.pop(0)
-                            new_PacMan_Pos = result[0]
+                            new_thief_position = result[0] if result else []
 
                     elif len(result) > 1:
                         result.pop(0)
-                        new_PacMan_Pos = result[0]
+                        new_thief_position = result[0]
+                elif current_level == 3 and food_positions:
+                    new_thief_position = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL3"], visited=visit_counter)
+                    visit_counter[thief_row][thief_col] += 1
 
-                if len(_food_Position) > 0 and (len(new_PacMan_Pos) == 0 or [row, col] == new_PacMan_Pos):
-                    new_PacMan_Pos = randomPacManNewPos(_map, row, col, N, M)
-                if len(new_PacMan_Pos) > 0:
-                    change_direction_PacMan(new_PacMan_Pos[0], new_PacMan_Pos[1])
-                    if check_collision_ghost(_ghost, new_PacMan_Pos[0], new_PacMan_Pos[1]):
-                        pac_can_move = False
-                        done = True
-                        status = -1
+                elif current_level == 4 and food_positions:
+                    new_thief_position = search.execute(ALGORITHMS=LEVEL_TO_ALGORITHM["LEVEL4"], depth=4, Score=score)
 
-        # ------------------------------------------------------
+                # Fallback for when no path is found
+                if food_positions and (not new_thief_position or [thief_row, thief_col] == new_thief_position):
+                    new_thief_position = get_random_valid_move(maze_map, thief_row, thief_col, height, width)
+                    
+                if new_thief_position:
+                    update_thief_direction(new_thief_position[0], new_thief_position[1])
+                    if check_collision_with_police(police_objects, new_thief_position[0], new_thief_position[1]):
+                        thief_can_move = False
+                        game_exit = True
+                        game_status = -1
 
+        # Render game
         screen.fill(BLACK)
-        Draw(screen)
+        draw_game_objects(screen)
         pygame.display.flip()
         clock.tick(FPS)
 
-    handleEndGame(status)
+    handle_game_end(game_status)
 
 
-done_2 = False
+game_end_done = False
 
 
-def handleEndGame(status: int):
-    global done_2
-    done_2 = False
-    bg = pygame.image.load("images/gameover.png")
-    bg = pygame.transform.scale(bg, (WIDTH, HEIGHT))
-    bg_w = pygame.image.load("images/win1.png")
-    bg_w = pygame.transform.scale(bg_w, (WIDTH, HEIGHT))
+def handle_game_end(status):
+    """Handle end game screen"""
+    global game_end_done
+    game_end_done = False
+    lose_bg = pygame.image.load("images/gameover.png")
+    lose_bg = pygame.transform.scale(lose_bg, (WIDTH, HEIGHT))
+    win_bg = pygame.image.load("images/win1.png")
+    win_bg = pygame.transform.scale(win_bg, (WIDTH, HEIGHT))
 
-    def clickContinue():
-        global done_2
-        done_2 = True
+    def click_continue():
+        global game_end_done
+        game_end_done = True
 
-    def clickQuit():
+    def click_quit():
         pygame.quit()
         sys.exit(0)
 
-    btnContinue = Button(WIDTH // 2 - 300, HEIGHT // 2 - 50, 200, 100, screen, "CONTINUE", clickContinue)
-    btnQuit = Button(WIDTH // 2 + 50, HEIGHT // 2 - 50, 200, 100, screen, "QUIT", clickQuit)
+    btn_continue = Button(WIDTH // 2 - 300, HEIGHT // 2 - 50, 200, 100, screen, "CONTINUE", click_continue)
+    btn_quit = Button(WIDTH // 2 + 50, HEIGHT // 2 - 50, 200, 100, screen, "QUIT", click_quit)
 
     delay = 100
-    while not done_2:
+    while not game_end_done:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -372,28 +382,29 @@ def handleEndGame(status: int):
             continue
 
         if status == -1:
-            screen.blit(bg, (0, 0))
+            screen.blit(lose_bg, (0, 0))
         else:
-            screen.blit(bg_w, (0, 0))
-            text_surface = my_font_2.render('Your Score: {Score}'.format(Score=Score), False, RED)
-            screen.blit(text_surface, (WIDTH // 4 - 65, 10))
+            screen.blit(win_bg, (0, 0))
+            score_text = large_font.render(f'Your Score: {score}', False, RED)
+            screen.blit(score_text, (WIDTH // 4 - 65, 10))
 
-        btnQuit.process()
-        btnContinue.process()
+        btn_quit.process()
+        btn_continue.process()
 
         pygame.display.flip()
         clock.tick(FPS)
 
-    showMenu()
+    show_menu()
 
 
-def showMenu():
-    _menu = Menu(screen)
-    global Level, Map_name
-    [Level, Map_name] = _menu.run()
-    startGame()
+def show_menu():
+    """Show game menu"""
+    menu = Menu(screen)
+    global current_level, map_file_path
+    [current_level, map_file_path] = menu.run()
+    start_game()
 
 
 if __name__ == '__main__':
-    showMenu()
+    show_menu()
     pygame.quit()

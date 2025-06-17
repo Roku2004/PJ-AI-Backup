@@ -1,8 +1,8 @@
-from Utils.utils import DDX, isValid2
-from constants import FOOD, MONSTER, WALL
+from Extension.extension import DDX, Police_check
+from constants import FOOD, POLICE, WALL
 
 
-def update_heuristic(_map, start_row, start_col, current_row, current_col, N, M, depth, visited, _type, cost):
+def update_heuristic(maze_map, start_row, start_col, current_row, current_col, height, width, depth, visited, object_type, cost):
     visited.append((current_row, current_col))
 
     if depth < 0:
@@ -11,15 +11,14 @@ def update_heuristic(_map, start_row, start_col, current_row, current_col, N, M,
         return
 
     point = 0
-    if _type == FOOD:
+    if object_type == FOOD:
         if depth == 2:
             point = 35
         if depth == 1:
             point = 10
         if depth == 0:
             point = 5
-
-    elif _type == MONSTER:
+    elif object_type == POLICE:
         if depth == 2:
             point = float("-inf")
         if depth == 1:
@@ -29,48 +28,46 @@ def update_heuristic(_map, start_row, start_col, current_row, current_col, N, M,
 
     cost[current_row][current_col] += point
 
-    for [d_r, d_c] in DDX:
-        new_row, new_col = current_row + d_r, current_col + d_c
-        if isValid2(_map, new_row, new_col, N, M) and (new_row, new_col) not in visited:
-            update_heuristic(_map, start_row, start_col, new_row, new_col, N, M, depth - 1, visited.copy(), _type, cost)
+    for [direction_row, direction_col] in DDX:
+        next_row, next_col = current_row + direction_row, current_col + direction_col
+        if Police_check(maze_map, next_row, next_col, height, width) and (next_row, next_col) not in visited:
+            update_heuristic(maze_map, start_row, start_col, next_row, next_col, height, width, depth - 1, visited.copy(), object_type, cost)
 
 
-def calc_heuristic(_map, start_row, start_col, current_row, current_col, N, M, depth, visited, cost, _visited):
+def calc_heuristic(maze_map, start_row, start_col, current_row, current_col, height, width, depth, visited, cost, visit_count):
     visited.append((current_row, current_col))
 
     if depth <= 0:
         return
 
-    for [d_r, d_c] in DDX:
-        new_row, new_col = current_row + d_r, current_col + d_c
-        if isValid2(_map, new_row, new_col, N, M) and (new_row, new_col) not in visited:
+    for [direction_row, direction_col] in DDX:
+        next_row, next_col = current_row + direction_row, current_col + direction_col
+        if Police_check(maze_map, next_row, next_col, height, width) and (next_row, next_col) not in visited:
 
             sub_visited = []
-            if _map[new_row][new_col] == FOOD:
-                update_heuristic(_map, start_row, start_col, new_row, new_col, N, M, 2, sub_visited, FOOD, cost)
-            elif _map[new_row][new_col] == MONSTER:
-                update_heuristic(_map, start_row, start_col, new_row, new_col, N, M, 2, sub_visited, MONSTER,
-                                 cost)
+            if maze_map[next_row][next_col] == FOOD:
+                update_heuristic(maze_map, start_row, start_col, next_row, next_col, height, width, 2, sub_visited, FOOD, cost)
+            elif maze_map[next_row][next_col] == POLICE:
+                update_heuristic(maze_map, start_row, start_col, next_row, next_col, height, width, 2, sub_visited, POLICE, cost)
 
-            calc_heuristic(_map, start_row, start_col, new_row, new_col, N, M, depth - 1, visited.copy(), cost,
-                           _visited)
+            calc_heuristic(maze_map, start_row, start_col, next_row, next_col, height, width, depth - 1, visited.copy(), cost, visit_count)
 
-    cost[current_row][current_col] -= _visited[current_row][current_col]
+    cost[current_row][current_col] -= visit_count[current_row][current_col]
 
 
-def local_search(_map, start_row, start_col, N, M, _visited):
+def find_path_using_localsearch(maze_map, start_row, start_col, height, width, visit_count):
     visited = []
-    cost = [[0 for _ in range(M)] for _ in range(N)]
+    cost = [[0 for _ in range(width)] for _ in range(height)]
 
-    calc_heuristic(_map, start_row, start_col, start_row, start_col, N, M, 3, visited, cost, _visited)
+    calc_heuristic(maze_map, start_row, start_col, start_row, start_col, height, width, 3, visited, cost, visit_count)
 
-    max_f = float("-inf")
-
+    max_value = float("-inf")
     result = []
-    for [d_r, d_c] in DDX:
-        new_row, new_col = start_row + d_r, start_col + d_c
-        if cost[new_row][new_col] - _visited[new_row][new_col] > max_f and _map[new_row][new_col] != WALL:
-            max_f = cost[new_row][new_col] - _visited[new_row][new_col]
-            result = [new_row, new_col]
+    
+    for [direction_row, direction_col] in DDX:
+        next_row, next_col = start_row + direction_row, start_col + direction_col
+        if cost[next_row][next_col] - visit_count[next_row][next_col] > max_value and maze_map[next_row][next_col] != WALL:
+            max_value = cost[next_row][next_col] - visit_count[next_row][next_col]
+            result = [next_row, next_col]
 
     return result
